@@ -37,7 +37,7 @@ public:
 
         std::vector<Vertex> vertices;
         float yScale = 0.2f;
-        float xzScale = 0.5f;
+        float xzScale = 1.8f;
 
 
         for (int i = 0; i < height; i++) {
