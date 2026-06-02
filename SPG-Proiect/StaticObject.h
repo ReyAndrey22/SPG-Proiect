@@ -24,17 +24,20 @@ public:
     glm::vec3 scale;
     float rotation;
 
+    
+    int type;
+
     StaticObject() : VAO(0), VBO(0), EBO(0), textureID(0), numIndices(0),
-        position(0.0f), scale(1.0f), rotation(0.0f) {
+        position(0.0f), scale(1.0f), rotation(0.0f), type(1) {
     }
 
-   
     static StaticObject CreateCube(glm::vec3 pos, glm::vec3 size, float rotY, unsigned int textID) {
         StaticObject obj;
         obj.position = pos;
         obj.scale = size;
         obj.rotation = rotY;
         obj.textureID = textID;
+        obj.type = 0; 
         obj.CreateCubeGeometry();
         return obj;
     }
@@ -46,8 +49,32 @@ public:
         obj.scale = glm::vec3(1.0f);
         obj.rotation = rotY;
         obj.textureID = textID;
+        obj.type = 1; 
         obj.CreateCylinderGeometry(radius, height, segments);
         return obj;
+    }
+
+   
+    bool CheckCollision(glm::vec3 carPos, glm::vec3 carSize) const {
+        if (type != 0) return false; 
+
+        
+        float bMinX = position.x - scale.x / 2.0f;
+        float bMaxX = position.x + scale.x / 2.0f;
+        float bMinZ = position.z - scale.z / 2.0f;
+        float bMaxZ = position.z + scale.z / 2.0f;
+
+       
+        float cMinX = carPos.x - carSize.x / 2.0f;
+        float cMaxX = carPos.x + carSize.x / 2.0f;
+        float cMinZ = carPos.z - carSize.z / 2.0f;
+        float cMaxZ = carPos.z + carSize.z / 2.0f;
+
+        
+        bool collisionX = bMaxX >= cMinX && cMaxX >= bMinX;
+        bool collisionZ = bMaxZ >= cMinZ && cMaxZ >= bMinZ;
+
+        return collisionX && collisionZ;
     }
 
     void Draw(const Shader& shader, const glm::mat4& view, const glm::mat4& projection) const {
@@ -74,9 +101,7 @@ public:
         if (VAO != 0) glDeleteVertexArrays(1, &VAO);
         if (VBO != 0) glDeleteBuffers(1, &VBO);
         if (EBO != 0) glDeleteBuffers(1, &EBO);
-       
     }
-
 
     static unsigned int LoadTexture(const char* path) {
         unsigned int tid;

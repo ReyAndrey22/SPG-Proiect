@@ -25,9 +25,28 @@ bool firstMouse = true;
 float deltaTime = 0.0f;
 float lastFrame = 0.0f;
 
+
+glm::vec3 carPos(0.0f, 0.0f, 185.0f);
+float carAngle = 0.0f;
+float carSpeed = 45.0f;
+glm::vec3 carSize(5.0f, 3.0f, 8.0f);
+
+
+float npcPresetAngle = 0.0f;
+float npcPresetSpeed = 0.5f; 
+glm::vec3 npcPresetPos(0.0f);
+glm::vec3 npcPresetSize(4.0f, 2.5f, 7.0f);
+
+
+glm::vec3 npcRandomPos(30.0f, 0.0f, 30.0f);
+glm::vec3 npcRandomDirection(1.0f, 0.0f, 0.0f);
+float npcRandomSpeed = 20.0f;
+float randomMoveTimer = 0.0f; 
+glm::vec3 npcRandomSize(3.0f, 3.0f, 3.0f);
+
 void framebuffer_size_callback(GLFWwindow* window, int width, int height);
 void mouse_callback(GLFWwindow* window, double xpos, double ypos);
-void processInput(GLFWwindow* window);
+void processInput(GLFWwindow* window, const Terrain& terrain, const std::vector<StaticObject>& objects);
 
 int main()
 {
@@ -36,7 +55,7 @@ int main()
     glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
     glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
 
-    GLFWwindow* window = glfwCreateWindow(SCR_WIDTH, SCR_HEIGHT, "Proiect SPG - Circuit Stradal", nullptr, nullptr);
+    GLFWwindow* window = glfwCreateWindow(SCR_WIDTH, SCR_HEIGHT, "Proiect SPG - Scena Urbana Animata", nullptr, nullptr);
     if (window == nullptr)
     {
         std::cout << "Failed to create GLFW window" << std::endl;
@@ -83,6 +102,11 @@ int main()
     unsigned int leavesTex = StaticObject::LoadTexture("textures/grass.png");
     unsigned int poleTex = StaticObject::LoadTexture("textures/asphalt.png");
     unsigned int lightTex = StaticObject::LoadTexture("textures/white.png");
+    unsigned int carTex = StaticObject::LoadTexture("textures/rainbow_bk.png");
+
+    
+    unsigned int presetNpcTex = StaticObject::LoadTexture("textures/rainbow_ft.png");
+    unsigned int randomNpcTex = StaticObject::LoadTexture("textures/rainbow_dn.png");
 
     std::vector<StaticObject> staticObjects;
     srand(static_cast<unsigned int>(time(0)));
@@ -91,7 +115,7 @@ int main()
     int numTrees = 35;
     int numStreetLights = 6;
 
-    
+   
     for (int i = 0; i < numBuildings; i++) {
         float angle = (glm::two_pi<float>() / numBuildings) * i + ((rand() % 100) / 500.0f);
         float spawnRadius = outerRadius + 25.0f + (rand() % 20);
@@ -112,14 +136,7 @@ int main()
     
     for (int i = 0; i < numTrees; i++) {
         float angle = (glm::two_pi<float>() / numTrees) * i + ((rand() % 100) / 200.0f);
-
-        float spawnRadius = 0.0f;
-        if (i % 2 == 0) {
-            spawnRadius = innerRadius - 15.0f - (rand() % 25);
-        }
-        else {
-            spawnRadius = outerRadius + 8.0f + (rand() % 12);
-        }
+        float spawnRadius = (i % 2 == 0) ? (innerRadius - 15.0f - (rand() % 25)) : (outerRadius + 8.0f + (rand() % 12));
 
         float x = spawnRadius * cos(angle);
         float z = spawnRadius * sin(angle);
@@ -158,9 +175,10 @@ int main()
         float boxY = y + poleHeight;
         staticObjects.push_back(StaticObject::CreateCube(glm::vec3(x, boxY, z), glm::vec3(boxSize), 0.0f, lightTex));
 
-        
         lightPositions.push_back(glm::vec3(x, boxY, z));
     }
+
+    carPos.y = myTerrain.GetHeight(carPos.x, carPos.z);
 
     objectShader.use();
     objectShader.setInt("texture_diffuse", 0);
@@ -175,7 +193,35 @@ int main()
         deltaTime = currentFrame - lastFrame;
         lastFrame = currentFrame;
 
-        processInput(window);
+        processInput(window, myTerrain, staticObjects);
+
+        
+
+        
+        npcPresetAngle += npcPresetSpeed * deltaTime; 
+        float middleRadius = (innerRadius + outerRadius) / 2.0f; 
+        npcPresetPos.x = middleRadius * cos(npcPresetAngle);
+        npcPresetPos.z = middleRadius * sin(npcPresetAngle);
+        npcPresetPos.y = myTerrain.GetHeight(npcPresetPos.x, npcPresetPos.z); 
+
+       
+        randomMoveTimer += deltaTime;
+        if (randomMoveTimer > 1.5f) { 
+            float randomAngle = static_cast<float>(rand() % 360);
+            float rad = glm::radians(randomAngle);
+            npcRandomDirection = glm::vec3(cos(rad), 0.0f, sin(rad));
+            randomMoveTimer = 0.0f; 
+        }
+        
+        npcRandomPos += npcRandomDirection * npcRandomSpeed * deltaTime;
+
+        
+        if (glm::length(npcRandomPos) > innerRadius - 10.0f) {
+            npcRandomDirection = -npcRandomDirection; 
+        }
+        npcRandomPos.y = myTerrain.GetHeight(npcRandomPos.x, npcRandomPos.z);
+
+        
 
         if (camera.Position.y < 5.0f)
             camera.Position.y = 5.0f;
@@ -187,38 +233,49 @@ int main()
         glm::mat4 view = camera.GetViewMatrix();
 
         mySkybox.Draw(skyboxShader, view, projection);
+        myTerrain.Draw(terrainShader, view, projection);
+
+        glClear(GL_DEPTH_BUFFER_BIT);
+        myRoad.Draw(roadShader, view, projection);
 
         
         std::vector<Shader*> lightingShaders = { &objectShader, &terrainShader, &roadShader };
-
         for (Shader* shader : lightingShaders) {
             shader->use();
             shader->setVec3("viewPos", camera.Position);
-
-            
             shader->setVec3("dirLightDir", glm::vec3(-0.3f, -1.0f, -0.4f));
             shader->setVec3("dirLightColor", glm::vec3(0.7f, 0.7f, 0.6f));
 
-           
             for (int i = 0; i < numStreetLights; i++) {
                 std::string baseName = "pointLights[" + std::to_string(i) + "].";
                 shader->setVec3(baseName + "position", lightPositions[i]);
-                shader->setVec3(baseName + "color", glm::vec3(1.0f, 0.85f, 0.5f)); 
+                shader->setVec3(baseName + "color", glm::vec3(1.0f, 0.85f, 0.5f));
                 shader->setFloat(baseName + "constant", 1.0f);
                 shader->setFloat(baseName + "linear", 0.007f);
                 shader->setFloat(baseName + "quadratic", 0.0002f);
             }
         }
 
-      
-        myTerrain.Draw(terrainShader, view, projection);
-
-        glClear(GL_DEPTH_BUFFER_BIT);
-        myRoad.Draw(roadShader, view, projection);
-
+       
         for (const auto& obj : staticObjects) {
             obj.Draw(objectShader, view, projection);
         }
+
+        
+        StaticObject visualCar = StaticObject::CreateCube(carPos, carSize, carAngle, carTex);
+        visualCar.Draw(objectShader, view, projection);
+        visualCar.Cleanup();
+
+       
+        float npcPresetRotation = -glm::degrees(npcPresetAngle) + 90.0f;
+        StaticObject visualPresetNpc = StaticObject::CreateCube(npcPresetPos, npcPresetSize, npcPresetRotation, presetNpcTex);
+        visualPresetNpc.Draw(objectShader, view, projection);
+        visualPresetNpc.Cleanup();
+
+        
+        StaticObject visualRandomNpc = StaticObject::CreateCube(npcRandomPos, npcRandomSize, 0.0f, randomNpcTex);
+        visualRandomNpc.Draw(objectShader, view, projection);
+        visualRandomNpc.Cleanup();
 
         glfwSwapBuffers(window);
         glfwPollEvents();
@@ -233,16 +290,18 @@ int main()
     glDeleteTextures(1, &leavesTex);
     glDeleteTextures(1, &poleTex);
     glDeleteTextures(1, &lightTex);
+    glDeleteTextures(1, &carTex);
+    glDeleteTextures(1, &presetNpcTex);
+    glDeleteTextures(1, &randomNpcTex);
 
     glfwTerminate();
     return 0;
 }
 
-void processInput(GLFWwindow* window)
+void processInput(GLFWwindow* window, const Terrain& terrain, const std::vector<StaticObject>& objects)
 {
     if (glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS)
         glfwSetWindowShouldClose(window, true);
-
     if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS)
         camera.ProcessKeyboard(FORWARD, deltaTime);
     if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS)
@@ -255,6 +314,32 @@ void processInput(GLFWwindow* window)
         camera.ProcessKeyboard(UP, deltaTime);
     if (glfwGetKey(window, GLFW_KEY_E) == GLFW_PRESS)
         camera.ProcessKeyboard(DOWN, deltaTime);
+
+    
+    glm::vec3 oldPos = carPos;
+
+    if (glfwGetKey(window, GLFW_KEY_J) == GLFW_PRESS)
+        carAngle += 100.0f * deltaTime;
+    if (glfwGetKey(window, GLFW_KEY_L) == GLFW_PRESS)
+        carAngle -= 100.0f * deltaTime;
+
+    float rad = glm::radians(carAngle);
+    glm::vec3 forwardDirection(sin(rad), 0.0f, cos(rad));
+
+    if (glfwGetKey(window, GLFW_KEY_I) == GLFW_PRESS)
+        carPos += forwardDirection * carSpeed * deltaTime;
+    if (glfwGetKey(window, GLFW_KEY_K) == GLFW_PRESS)
+        carPos -= forwardDirection * carSpeed * deltaTime;
+
+    carPos.y = terrain.GetHeight(carPos.x, carPos.z);
+
+    
+    for (const auto& obj : objects) {
+        if (obj.CheckCollision(carPos, carSize)) {
+            carPos = oldPos;
+            break;
+        }
+    }
 }
 
 void framebuffer_size_callback(GLFWwindow* window, int width, int height)
