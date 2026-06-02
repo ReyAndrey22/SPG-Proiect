@@ -5,6 +5,7 @@
 #include <iostream>
 #include <vector>
 #include <ctime>   
+#include <string>
 
 #include "Shader.h"
 #include "Camera.h"
@@ -77,12 +78,11 @@ int main()
     };
     Skybox mySkybox(faces);
 
-
     unsigned int buildingTex = StaticObject::LoadTexture("textures/medieval_red_brick.png");
     unsigned int barkTex = StaticObject::LoadTexture("textures/pine_bark.png");
     unsigned int leavesTex = StaticObject::LoadTexture("textures/grass.png");
     unsigned int poleTex = StaticObject::LoadTexture("textures/asphalt.png");
-    unsigned int lightTex = StaticObject::LoadTexture("textures/grey_plaster.png");
+    unsigned int lightTex = StaticObject::LoadTexture("textures/white.png");
 
     std::vector<StaticObject> staticObjects;
     srand(static_cast<unsigned int>(time(0)));
@@ -91,7 +91,7 @@ int main()
     int numTrees = 35;
     int numStreetLights = 6;
 
-
+    
     for (int i = 0; i < numBuildings; i++) {
         float angle = (glm::two_pi<float>() / numBuildings) * i + ((rand() % 100) / 500.0f);
         float spawnRadius = outerRadius + 25.0f + (rand() % 20);
@@ -109,7 +109,7 @@ int main()
         staticObjects.push_back(StaticObject::CreateCube(glm::vec3(x, y, z), glm::vec3(w, h, d), randomRotation, buildingTex));
     }
 
-
+    
     for (int i = 0; i < numTrees; i++) {
         float angle = (glm::two_pi<float>() / numTrees) * i + ((rand() % 100) / 200.0f);
 
@@ -130,19 +130,17 @@ int main()
 
         staticObjects.push_back(StaticObject::CreateCylinder(glm::vec3(x, y, z), radius, height, 16, 0.0f, barkTex));
 
-
         float leafSize1 = 6.0f + (rand() % 4);
         float leafY1 = y + height;
-
         staticObjects.push_back(StaticObject::CreateCube(glm::vec3(x, leafY1, z), glm::vec3(leafSize1), 0.0f, leavesTex));
 
         float leafSize2 = leafSize1 * 0.7f;
         float leafY2 = leafY1 + leafSize1;
-
         staticObjects.push_back(StaticObject::CreateCube(glm::vec3(x, leafY2, z), glm::vec3(leafSize2), 45.0f, leavesTex));
     }
 
-
+    
+    std::vector<glm::vec3> lightPositions;
     for (int i = 0; i < numStreetLights; i++) {
         float angle = (glm::two_pi<float>() / numStreetLights) * i;
         float spawnRadius = outerRadius + 4.0f;
@@ -154,21 +152,20 @@ int main()
         float poleRadius = 0.3f;
         float poleHeight = 16.0f;
 
-        
         staticObjects.push_back(StaticObject::CreateCylinder(glm::vec3(x, y, z), poleRadius, poleHeight, 12, 0.0f, poleTex));
 
-       
         float boxSize = 1.2f;
         float boxY = y + poleHeight;
         staticObjects.push_back(StaticObject::CreateCube(glm::vec3(x, boxY, z), glm::vec3(boxSize), 0.0f, lightTex));
+
+        
+        lightPositions.push_back(glm::vec3(x, boxY, z));
     }
 
     objectShader.use();
     objectShader.setInt("texture_diffuse", 0);
-
     terrainShader.use();
     terrainShader.setInt("texture_diffuse", 0);
-
     roadShader.use();
     roadShader.setInt("texture_diffuse", 0);
 
@@ -190,6 +187,30 @@ int main()
         glm::mat4 view = camera.GetViewMatrix();
 
         mySkybox.Draw(skyboxShader, view, projection);
+
+        
+        std::vector<Shader*> lightingShaders = { &objectShader, &terrainShader, &roadShader };
+
+        for (Shader* shader : lightingShaders) {
+            shader->use();
+            shader->setVec3("viewPos", camera.Position);
+
+            
+            shader->setVec3("dirLightDir", glm::vec3(-0.3f, -1.0f, -0.4f));
+            shader->setVec3("dirLightColor", glm::vec3(0.7f, 0.7f, 0.6f));
+
+           
+            for (int i = 0; i < numStreetLights; i++) {
+                std::string baseName = "pointLights[" + std::to_string(i) + "].";
+                shader->setVec3(baseName + "position", lightPositions[i]);
+                shader->setVec3(baseName + "color", glm::vec3(1.0f, 0.85f, 0.5f)); 
+                shader->setFloat(baseName + "constant", 1.0f);
+                shader->setFloat(baseName + "linear", 0.007f);
+                shader->setFloat(baseName + "quadratic", 0.0002f);
+            }
+        }
+
+      
         myTerrain.Draw(terrainShader, view, projection);
 
         glClear(GL_DEPTH_BUFFER_BIT);
@@ -211,7 +232,7 @@ int main()
     glDeleteTextures(1, &barkTex);
     glDeleteTextures(1, &leavesTex);
     glDeleteTextures(1, &poleTex);
-    glDeleteTextures(1, &lightTex); // Eliberare din memorie la final
+    glDeleteTextures(1, &lightTex);
 
     glfwTerminate();
     return 0;
