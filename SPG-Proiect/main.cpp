@@ -63,7 +63,6 @@ int main()
 
     Terrain myTerrain("textures/heightmap.png", "textures/grass.png");
 
-    
     float innerRadius = 160.0f;
     float outerRadius = 210.0f;
     Road myRoad(myTerrain, innerRadius, outerRadius, 600, "textures/asphalt.jpg");
@@ -78,53 +77,90 @@ int main()
     };
     Skybox mySkybox(faces);
 
-    
+
+    unsigned int buildingTex = StaticObject::LoadTexture("textures/medieval_red_brick.png");
+    unsigned int barkTex = StaticObject::LoadTexture("textures/pine_bark.png");
+    unsigned int leavesTex = StaticObject::LoadTexture("textures/grass.png");
+    unsigned int poleTex = StaticObject::LoadTexture("textures/asphalt.png");
+    unsigned int lightTex = StaticObject::LoadTexture("textures/grey_plaster.png");
+
     std::vector<StaticObject> staticObjects;
     srand(static_cast<unsigned int>(time(0)));
 
     int numBuildings = 15;
     int numTrees = 35;
+    int numStreetLights = 6;
 
-    
+
     for (int i = 0; i < numBuildings; i++) {
-        
         float angle = (glm::two_pi<float>() / numBuildings) * i + ((rand() % 100) / 500.0f);
-        float spawnRadius = outerRadius + 25.0f + (rand() % 20); 
+        float spawnRadius = outerRadius + 25.0f + (rand() % 20);
 
         float x = spawnRadius * cos(angle);
         float z = spawnRadius * sin(angle);
-        float y = myTerrain.GetHeight(x, z); 
+        float y = myTerrain.GetHeight(x, z);
 
-        
         float w = 15.0f + (rand() % 12);
-        float h = 25.0f + (rand() % 30); 
+        float h = 25.0f + (rand() % 30);
         float d = 15.0f + (rand() % 12);
 
         float randomRotation = static_cast<float>(rand() % 360);
 
-        staticObjects.push_back(StaticObject::CreateCube(glm::vec3(x, y, z), glm::vec3(w, h, d), randomRotation, "textures/medieval_red_brick.png"));
+        staticObjects.push_back(StaticObject::CreateCube(glm::vec3(x, y, z), glm::vec3(w, h, d), randomRotation, buildingTex));
     }
 
-    
+
     for (int i = 0; i < numTrees; i++) {
         float angle = (glm::two_pi<float>() / numTrees) * i + ((rand() % 100) / 200.0f);
 
         float spawnRadius = 0.0f;
         if (i % 2 == 0) {
-            spawnRadius = innerRadius - 15.0f - (rand() % 25); 
+            spawnRadius = innerRadius - 15.0f - (rand() % 25);
         }
         else {
-            spawnRadius = outerRadius + 8.0f + (rand() % 12);   
+            spawnRadius = outerRadius + 8.0f + (rand() % 12);
         }
 
         float x = spawnRadius * cos(angle);
         float z = spawnRadius * sin(angle);
         float y = myTerrain.GetHeight(x, z);
 
-        float radius = 1.8f + (rand() % 15) * 0.1f; 
-        float height = 12.0f + (rand() % 12);         
+        float radius = 1.0f + (rand() % 10) * 0.1f;
+        float height = 10.0f + (rand() % 8);
 
-        staticObjects.push_back(StaticObject::CreateCylinder(glm::vec3(x, y, z), radius, height, 16, 0.0f, "textures/pine_bark.png"));
+        staticObjects.push_back(StaticObject::CreateCylinder(glm::vec3(x, y, z), radius, height, 16, 0.0f, barkTex));
+
+
+        float leafSize1 = 6.0f + (rand() % 4);
+        float leafY1 = y + height;
+
+        staticObjects.push_back(StaticObject::CreateCube(glm::vec3(x, leafY1, z), glm::vec3(leafSize1), 0.0f, leavesTex));
+
+        float leafSize2 = leafSize1 * 0.7f;
+        float leafY2 = leafY1 + leafSize1;
+
+        staticObjects.push_back(StaticObject::CreateCube(glm::vec3(x, leafY2, z), glm::vec3(leafSize2), 45.0f, leavesTex));
+    }
+
+
+    for (int i = 0; i < numStreetLights; i++) {
+        float angle = (glm::two_pi<float>() / numStreetLights) * i;
+        float spawnRadius = outerRadius + 4.0f;
+
+        float x = spawnRadius * cos(angle);
+        float z = spawnRadius * sin(angle);
+        float y = myTerrain.GetHeight(x, z);
+
+        float poleRadius = 0.3f;
+        float poleHeight = 16.0f;
+
+        
+        staticObjects.push_back(StaticObject::CreateCylinder(glm::vec3(x, y, z), poleRadius, poleHeight, 12, 0.0f, poleTex));
+
+       
+        float boxSize = 1.2f;
+        float boxY = y + poleHeight;
+        staticObjects.push_back(StaticObject::CreateCube(glm::vec3(x, boxY, z), glm::vec3(boxSize), 0.0f, lightTex));
     }
 
     objectShader.use();
@@ -159,7 +195,6 @@ int main()
         glClear(GL_DEPTH_BUFFER_BIT);
         myRoad.Draw(roadShader, view, projection);
 
-       
         for (const auto& obj : staticObjects) {
             obj.Draw(objectShader, view, projection);
         }
@@ -171,6 +206,12 @@ int main()
     for (auto& obj : staticObjects) {
         obj.Cleanup();
     }
+
+    glDeleteTextures(1, &buildingTex);
+    glDeleteTextures(1, &barkTex);
+    glDeleteTextures(1, &leavesTex);
+    glDeleteTextures(1, &poleTex);
+    glDeleteTextures(1, &lightTex); // Eliberare din memorie la final
 
     glfwTerminate();
     return 0;
